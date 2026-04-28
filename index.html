@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Star Social Pro | منصة النجم</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* نظام الألوان (ستايل تيك توك وواتساب المظلم) */
+        :root {
+            --bg-black: #000000;
+            --card-bg: #121212;
+            --accent: #fe2c55; /* أحمر تيك توك */
+            --green: #25d366; /* أخضر واتساب */
+            --blue: #0095f6;  /* أزرق إنستا */
+            --text-main: #ffffff;
+            --text-gray: #8e8e8e;
+            --nav-bg: #000000;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body, html { 
+            margin: 0; padding: 0; width: 100%; height: 100%; 
+            background-color: var(--bg-black); color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow: hidden;
+        }
+
+        /* شاشات الموقع */
+        .screen { display: none; height: 100vh; flex-direction: column; width: 100%; position: absolute; top: 0; left: 0; }
+        .screen.active { display: flex; }
+
+        /* شاشة الدخول والتسجيل */
+        .auth-container { justify-content: center; align-items: center; background: linear-gradient(135deg, #000 0%, #1a1a1a 100%); }
+        .auth-card { width: 90%; max-width: 400px; padding: 40px 20px; background: rgba(255,255,255,0.05); border-radius: 30px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); text-align: center; }
+        .auth-card h1 { font-size: 32px; margin-bottom: 10px; color: var(--accent); letter-spacing: -1px; }
+        .input-group { margin-bottom: 15px; text-align: right; }
+        .input-group label { display: block; margin-bottom: 5px; font-size: 12px; color: var(--text-gray); padding-right: 10px; }
+        input[type="text"], input[type="password"], input[type="tel"] {
+            width: 100%; padding: 15px; border-radius: 15px; border: 1px solid #333; background: #222; color: #fff; font-size: 16px; outline: none; transition: 0.3s;
+        }
+        input:focus { border-color: var(--accent); box-shadow: 0 0 10px rgba(254, 44, 85, 0.2); }
+        
+        /* رفع الصورة الشخصية */
+        .profile-upload { position: relative; width: 100px; height: 100px; margin: 0 auto 20px; }
+        .profile-preview { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent); background: #333; }
+        .upload-icon { position: absolute; bottom: 0; right: 0; background: var(--accent); width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 2px solid var(--bg-black); }
+        #file-input { display: none; }
+
+        .btn-primary { width: 100%; padding: 15px; border-radius: 15px; border: none; background: var(--accent); color: white; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.3s; }
+        .btn-primary:active { transform: scale(0.98); opacity: 0.8; }
+
+        /* الهيدر العلوي */
+        .header { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 0.1px solid #222; background: var(--bg-black); }
+        .header .logo { font-size: 22px; font-weight: 900; color: var(--text-main); }
+        .header i { font-size: 20px; cursor: pointer; }
+
+        /* شريط القصص/المتصلين (ستايل إنستا وتيك توك) */
+        .stories-bar { display: flex; gap: 15px; padding: 15px; overflow-x: auto; border-bottom: 0.1px solid #222; scrollbar-width: none; }
+        .stories-bar::-webkit-scrollbar { display: none; }
+        .story-item { display: flex; flex-direction: column; align-items: center; min-width: 70px; }
+        .story-ring { width: 65px; height: 65px; border-radius: 50%; padding: 3px; background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%); margin-bottom: 5px; position: relative; }
+        .story-ring.online::after { content: ''; position: absolute; bottom: 3px; right: 3px; width: 14px; height: 14px; background: var(--green); border: 3px solid var(--bg-black); border-radius: 50%; }
+        .story-ring img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; background: #000; border: 2px solid #000; }
+        .story-item span { font-size: 11px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center; }
+
+        /* قائمة المحادثات (ستايل واتساب) */
+        .chat-list { flex: 1; overflow-y: auto; padding-bottom: 80px; }
+        .chat-item { display: flex; align-items: center; padding: 15px 20px; gap: 15px; transition: 0.2s; cursor: pointer; border-bottom: 0.1px solid #111; }
+        .chat-item:active { background: #1a1a1a; }
+        .user-avatar { width: 55px; height: 55px; border-radius: 50%; object-fit: cover; background: #333; }
+        .chat-info { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+        .chat-info-top { display: flex; justify-content: space-between; align-items: center; }
+        .chat-info-top b { font-size: 16px; color: var(--text-main); }
+        .chat-info-top span { font-size: 12px; color: var(--text-gray); }
+        .chat-msg-preview { font-size: 14px; color: var(--text-gray); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+
+        /* نافذة الدردشة الكاملة */
+        #chat-window { position: fixed; inset: 0; background: var(--bg-black); z-index: 2000; display: none; flex-direction: column; transform: translateX(100%); transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        #chat-window.open { display: flex; transform: translateX(0); }
+        .chat-header { padding: 10px 15px; display: flex; align-items: center; gap: 15px; background: var(--card-bg); border-bottom: 0.1px solid #333; }
+        .chat-header .back-btn { font-size: 20px; cursor: pointer; }
+        .chat-header .target-avatar { width: 40px; height: 40px; border-radius: 50%; }
+        
+        .chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-blend-mode: overlay; background-color: #000; }
+        .bubble { max-width: 75%; padding: 10px 15px; border-radius: 20px; font-size: 15px; position: relative; animation: pop 0.2s ease; }
+        @keyframes pop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .bubble.me { align-self: flex-end; background: var(--accent); color: white; border-bottom-right-radius: 2px; }
+        .bubble.other { align-self: flex-start; background: #26262b; color: white; border-bottom-left-radius: 2px; }
+        .msg-time { font-size: 10px; margin-top: 5px; opacity: 0.7; display: block; text-align: left; }
+
+        .chat-input-bar { padding: 10px 15px; display: flex; align-items: center; gap: 12px; background: var(--bg-black); border-top: 0.1px solid #222; }
+        .input-wrapper { flex: 1; background: #1c1c1e; border-radius: 25px; padding: 8px 15px; display: flex; align-items: center; }
+        .input-wrapper input { background: transparent; border: none; color: white; flex: 1; outline: none; padding: 5px 10px; font-size: 15px; }
+
+        /* شريط التنقل السفلي (تيك توك ستايل) */
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; height: 70px; background: var(--nav-bg); display: flex; justify-content: space-around; align-items: center; border-top: 0.1px solid #222; z-index: 1000; }
+        .nav-item { color: var(--text-gray); display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer; transition: 0.3s; }
+        .nav-item.active { color: var(--text-main); }
+        .nav-item i { font-size: 22px; }
+        .nav-item span { font-size: 10px; }
+        .nav-center { width: 45px; height: 30px; background: linear-gradient(to right, #00f2ea 0%, #fe2c55 100%); border-radius: 8px; position: relative; display: flex; align-items: center; justify-content: center; color: black; }
+
+        /* لوحة التحكم (المالك) */
+        #admin-panel { position: fixed; bottom: 0; width: 100%; height: 70vh; background: #111; border-top-left-radius: 30px; border-top-right-radius: 30px; z-index: 3000; padding: 30px 20px; display: none; flex-direction: column; border-top: 2px solid var(--accent); }
+        .admin-user-row { display: flex; justify-content: space-between; align-items: center; background: #1c1c1e; padding: 15px; border-radius: 15px; margin-bottom: 10px; }
+        .del-btn { background: #ff4d4d; border: none; color: white; padding: 8px 15px; border-radius: 8px; }
+
+        /* تحسينات الموبايل */
+        @media (max-width: 480px) {
+            .bubble { max-width: 85%; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="screen-auth" class="screen auth-container active">
+        <div class="auth-card">
+            <h1>STAR Pro</h1>
+            <p style="color: var(--text-gray); margin-bottom: 25px;">أنشئ حسابك وانضم لعالم النجوم</p>
+            
+            <div class="profile-upload">
+                <img src="https://via.placeholder.com/150" id="preview-img" class="profile-preview">
+                <label for="file-input" class="upload-icon"><i class="fas fa-camera"></i></label>
+                <input type="file" id="file-input" accept="image/*" onchange="handleImage(this)">
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="user-name" placeholder="الاسم بالكامل">
+            </div>
+            <div class="input-group">
+                <input type="tel" id="user-phone" placeholder="رقم الهاتف (سيكون هويتك)">
+            </div>
+            <div class="input-group">
+                <input type="password" id="user-pass" placeholder="كلمة السر">
+            </div>
+            <button class="btn-primary" onclick="handleAuth()">دخول / تسجيل</button>
+            <p onclick="ownerLogin()" style="margin-top: 20px; font-size: 12px; color: #333; cursor: pointer;">دخول المالك الملكي 👑</p>
+        </div>
+    </div>
+
+    <div id="screen-main" class="screen">
+        <div class="header">
+            <i class="fas fa-bars" onclick="toggleAdmin()"></i>
+            <div class="logo">Star Messenger</div>
+            <i class="fas fa-search"></i>
+        </div>
+
+        <div class="stories-bar" id="online-users-bar">
+            <div class="story-item">
+                <div class="story-ring online"><img src="https://via.placeholder.com/100"></div>
+                <span>أنت</span>
+            </div>
+        </div>
+
+        <div class="chat-list" id="chats-container">
+            <p style="text-align:center; padding:50px; color:var(--text-gray);">جاري جلب النجوم...</p>
+        </div>
+
+        <div class="bottom-nav">
+            <div class="nav-item active">
+                <i class="fas fa-comment-dots"></i>
+                <span>الرسايل</span>
+            </div>
+            <div class="nav-item">
+                <i class="fas fa-users"></i>
+                <span>الأصدقاء</span>
+            </div>
+            <div class="nav-center">
+                <i class="fas fa-plus"></i>
+            </div>
+            <div class="nav-item">
+                <i class="fas fa-play-circle"></i>
+                <span>فيديوهات</span>
+            </div>
+            <div class="nav-item" onclick="logout()">
+                <i class="fas fa-user-circle"></i>
+                <span>خروج</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="chat-window">
+        <div class="chat-header">
+            <i class="fas fa-chevron-right back-btn" onclick="closeChat()"></i>
+            <img src="" id="target-pic" class="target-avatar">
+            <div style="flex:1">
+                <b id="target-name" style="display:block; font-size:16px;">الاسم</b>
+                <span id="target-status" style="font-size:11px; color:var(--green)">نشط الآن</span>
+            </div>
+            <i class="fas fa-phone-alt"></i>
+            <i class="fas fa-video" style="margin-right: 15px;"></i>
+        </div>
+
+        <div class="chat-messages" id="chat-messages-box">
+            </div>
+
+        <div class="chat-input-bar">
+            <i class="fas fa-plus-circle" style="font-size:22px; color:var(--text-gray)"></i>
+            <div class="input-wrapper">
+                <input type="text" id="msg-text-input" placeholder="اكتب رسالة...">
+                <i class="far fa-smile" style="color:var(--text-gray)"></i>
+            </div>
+            <div id="send-btn" onclick="sendMessage()" style="width:40px; height:40px; background:var(--accent); border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+                <i class="fas fa-paper-plane" style="font-size:18px;"></i>
+            </div>
+        </div>
+    </div>
+
+    <div id="admin-panel">
+        <h2 style="color: var(--accent); margin-top: 0;">لوحة إدارة النجوم 👑</h2>
+        <div style="flex: 1; overflow-y: auto;" id="admin-users-list">
+            </div>
+        <button class="btn-primary" style="background:#333" onclick="toggleAdmin()">إغلاق اللوحة</button>
+    </div>
+
+    <script>
+        // --- 1. إعدادات Firebase ---
+        // ملاحظة: استخدم نفس قاعدة البيانات اللي بعتهالي
+        const firebaseConfig = {
+            databaseURL: "https://groop-27edc-default-rtdb.europe-west1.firebasedatabase.app/"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // --- 2. المتغيرات العامة ---
+        let currentUser = JSON.parse(localStorage.getItem('star_user'));
+        let currentChatPath = "";
+        let base64Image = ""; // لتخزين صورة البروفايل
+
+        // تشغيل الموقع إذا كان هناك جلسة مسجلة
+        if (currentUser) {
+            showScreen('screen-main');
+            loadMainData();
+        }
+
+        // --- 3. وظائف الحساب (Auth) ---
+        function handleImage(input) {
+            if (input.files && input.files[0]) {
+                let reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('preview-img').src = e.target.result;
+                    base64Image = e.target.result; // تحويل الصورة لكود نصي للتخزين
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function handleAuth() {
+            const name = document.getElementById('user-name').value;
+            const phone = document.getElementById('user-phone').value;
+            const pass = document.getElementById('user-pass').value;
+
+            if (!name || !phone || !pass) {
+                return Swal.fire('خطأ', 'برجاء ملء جميع البيانات وصورة البروفايل', 'error');
+            }
+
+            const userData = {
+                name: name,
+                phone: phone,
+                pass: pass,
+                avatar: base64Image || "https://via.placeholder.com/150",
+                status: "online",
+                lastSeen: Date.now(),
+                role: "user"
+            };
+
+            // حفظ في Firebase (باسم رقم الهاتف ليكون فريد)
+            db.ref('users/' + phone).set(userData).then(() => {
+                localStorage.setItem('star_user', JSON.stringify(userData));
+                currentUser = userData;
+                showScreen('screen-main');
+                loadMainData();
+            });
+        }
+
+        function ownerLogin() {
+            Swal.fire({
+                title: 'رمز دخول المالك الملكي',
+                input: 'password',
+                inputAttributes: { autocapitalize: 'off' },
+                showCancelButton: true,
+                confirmButtonText: 'تأكيد',
+                confirmButtonColor: '#fe2c55'
+            }).then((result) => {
+                if (result.value === "2009257mama") {
+                    const adminData = { name: "المالك النجم 👑", phone: "admin", role: "admin", avatar: "" };
+                    localStorage.setItem('star_user', JSON.stringify(adminData));
+                    currentUser = adminData;
+                    location.reload();
+                } else if(result.value) {
+                    Swal.fire('خطأ', 'الرمز غير صحيح يا ملك', 'error');
+                }
+            });
+        }
+
+        // --- 4. جلب البيانات (Main Logic) ---
+        function loadMainData() {
+            // جلب قائمة المستخدمين (الرسايل والستوريز)
+            db.ref('users').on('value', (snapshot) => {
+                const users = snapshot.val();
+                const container = document.getElementById('chats-container');
+                const storiesBar = document.getElementById('online-users-bar');
+                
+                container.innerHTML = "";
+                storiesBar.innerHTML = `
+                    <div class="story-item">
+                        <div class="story-ring online"><img src="${currentUser.avatar || 'https://via.placeholder.com/100'}"></div>
+                        <span>أنت</span>
+                    </div>
+                `;
+
+                for (let id in users) {
+                    if (id !== currentUser.phone) {
+                        const user = users[id];
+                        
+                        // إضافة لشريط القصص (المتصلين الآن)
+                        storiesBar.innerHTML += `
+                            <div class="story-item" onclick="openChat('${id}', '${user.name}', '${user.avatar}')">
+                                <div class="story-ring online"><img src="${user.avatar}"></div>
+                                <span>${user.name.split(' ')[0]}</span>
+                            </div>
+                        `;
+
+                        // إضافة لقائمة الرسايل
+                        container.innerHTML += `
+                            <div class="chat-item" onclick="openChat('${id}', '${user.name}', '${user.avatar}')">
+                                <img src="${user.avatar}" class="user-avatar">
+                                <div class="chat-info">
+                                    <div class="chat-info-top">
+                                        <b>${user.name}</b>
+                                        <span>١٢:٣٠ م</span>
+                                    </div>
+                                    <p class="chat-msg-preview">اضغط لبدء المراسلة مع النجم...</p>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+            });
+
+            if (currentUser.role === 'admin') {
+                loadAdminList();
+            }
+        }
+
+        // --- 5. نظام المراسلة (Chat System) ---
+        function openChat(targetPhone, targetName, targetAvatar) {
+            const chatWindow = document.getElementById('chat-window');
+            document.getElementById('target-name').innerText = targetName;
+            document.getElementById('target-pic').src = targetAvatar;
+            
+            // إنشاء مسار فريد للمحادثة (ترتيب أرقام التليفون لضمان نفس المسار للطرفين)
+            currentChatPath = [currentUser.phone, targetPhone].sort().join('_');
+            
+            chatWindow.style.display = 'flex';
+            setTimeout(() => chatWindow.classList.add('open'), 10);
+
+            // جلب الرسائل
+            db.ref('messages/' + currentChatPath).on('value', (snapshot) => {
+                const msgsBox = document.getElementById('chat-messages-box');
+                msgsBox.innerHTML = "";
+                const data = snapshot.val();
+                for (let id in data) {
+                    const m = data[id];
+                    const time = new Date(m.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    const isMe = m.sender === currentUser.phone;
+                    msgsBox.innerHTML += `
+                        <div class="bubble ${isMe ? 'me' : 'other'}">
+                            ${m.text}
+                            <span class="msg-time">${time}</span>
+                        </div>
+                    `;
+                }
+                msgsBox.scrollTop = msgsBox.scrollHeight;
+            });
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('msg-text-input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const msgData = {
+                sender: currentUser.phone,
+                text: text,
+                time: Date.now()
+            };
+
+            db.ref('messages/' + currentChatPath).push(msgData);
+            input.value = "";
+        }
+
+        // إرسال الرسالة عند الضغط على Enter
+        document.getElementById('msg-text-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        function closeChat() {
+            const chatWindow = document.getElementById('chat-window');
+            chatWindow.classList.remove('open');
+            setTimeout(() => chatWindow.style.display = 'none', 300);
+            db.ref('messages/' + currentChatPath).off(); // إيقاف الاستماع للرسايل
+        }
+
+        // --- 6. وظائف المالك (Admin) ---
+        function toggleAdmin() {
+            if (currentUser.role !== 'admin') return Swal.fire('عذراً', 'هذه اللوحة للمالك فقط', 'warning');
+            const panel = document.getElementById('admin-panel');
+            panel.style.display = (panel.style.display === 'flex') ? 'none' : 'flex';
+        }
+
+        function loadAdminList() {
+            db.ref('users').on('value', (snapshot) => {
+                const users = snapshot.val();
+                const list = document.getElementById('admin-users-list');
+                list.innerHTML = "";
+                for (let id in users) {
+                    if (id !== 'admin') {
+                        list.innerHTML += `
+                            <div class="admin-user-row">
+                                <span><b>${users[id].name}</b> (${id})</span>
+                                <button class="del-btn" onclick="deleteUser('${id}')">حذف النجم</button>
+                            </div>
+                        `;
+                    }
+                }
+            });
+        }
+
+        function deleteUser(id) {
+            if (confirm('هل أنت متأكد من طرد هذا النجم نهائياً؟')) {
+                db.ref('users/' + id).remove();
+            }
+        }
+
+        // --- 7. وظائف عامة ---
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function logout() {
+            localStorage.removeItem('star_user');
+            location.reload();
+        }
+
+    </script>
+</body>
+</html>
